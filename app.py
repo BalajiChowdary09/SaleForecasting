@@ -1,278 +1,834 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
-import streamlit as st
 import matplotlib.pyplot as plt
+import plotly.express as px
 import seaborn as sns
 
-from sklearn.ensemble import IsolationForest
-from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+from sklearn.ensemble import IsolationForest
 
+# -----------------------------
+# Page Configuration
+# -----------------------------
 st.set_page_config(
     page_title="Sales Forecasting Dashboard",
+    page_icon="📊",
     layout="wide"
 )
 
-st.title("📊 End-to-End Sales Forecasting & Demand Intelligence")
+st.title("📊 End-to-End Sales Forecasting & Demand Intelligence System")
+st.markdown("---")
 
+# -----------------------------
 # Load Dataset
-df = pd.read_csv("train.csv")
+# -----------------------------
+@st.cache_data
+def load_data():
 
-df["Order Date"] = pd.to_datetime(
-    df["Order Date"],
-    format="%d/%m/%Y",
-    errors="coerce"
-)
+    df = pd.read_csv("train.csv")
 
-df["Ship Date"] = pd.to_datetime(
-    df["Ship Date"],
-    format="%d/%m/%Y",
-    errors="coerce"
-)
+    df["Order Date"] = pd.to_datetime(
+        df["Order Date"],
+        dayfirst=True
+    )
 
-df["Year"] = df["Order Date"].dt.year
-df["Month"] = df["Order Date"].dt.month
+    df["Ship Date"] = pd.to_datetime(
+        df["Ship Date"],
+        dayfirst=True
+    )
 
+    df["Year"] = df["Order Date"].dt.year
+    df["Month"] = df["Order Date"].dt.month
+    df["Quarter"] = df["Order Date"].dt.quarter
+    df["Week"] = df["Order Date"].dt.isocalendar().week
+    df["Day"] = df["Order Date"].dt.day_name()
+
+    return df
+
+df = load_data()
+
+# -----------------------------
 # Sidebar
-page = st.sidebar.selectbox(
+# -----------------------------
+st.sidebar.title("Navigation")
+
+page = st.sidebar.radio(
     "Select Page",
     [
-        "Sales Overview",
-        "Forecast Explorer",
-        "Anomaly Report",
-        "Demand Segments"
+        "🏠 Sales Overview",
+        "📈 Forecast Explorer",
+        "🚨 Anomaly Report",
+        "📦 Product Demand Segments"
     ]
 )
 
-# -------------------------------------------------------
-# Page 1
-# -------------------------------------------------------
+st.sidebar.markdown("---")
 
-if page=="Sales Overview":
+selected_year = st.sidebar.selectbox(
+    "Select Year",
+    sorted(df["Year"].unique())
+)
 
-    st.header("Sales Overview")
+selected_region = st.sidebar.selectbox(
+    "Select Region",
+    ["All"] + sorted(df["Region"].unique())
+)
 
-    yearly = df.groupby("Year")["Sales"].sum()
+selected_category = st.sidebar.selectbox(
+    "Select Category",
+    ["All"] + sorted(df["Category"].unique())
+)
 
-    fig,ax=plt.subplots(figsize=(8,4))
+filtered_df = df.copy()
 
-    yearly.plot(kind="bar",ax=ax)
+filtered_df = filtered_df[
+    filtered_df["Year"] == selected_year
+]
 
-    ax.set_ylabel("Sales")
-
-    st.pyplot(fig)
-
-    monthly=df.groupby(
-        pd.Grouper(key="Order Date",freq="ME")
-    )["Sales"].sum()
-
-    fig,ax=plt.subplots(figsize=(10,4))
-
-    monthly.plot(ax=ax)
-
-    st.pyplot(fig)
-
-    region=st.selectbox(
-        "Region",
-        sorted(df["Region"].unique())
-    )
-
-    category=st.selectbox(
-        "Category",
-        sorted(df["Category"].unique())
-    )
-
-    filtered=df[
-        (df["Region"]==region) &
-        (df["Category"]==category)
+if selected_region != "All":
+    filtered_df = filtered_df[
+        filtered_df["Region"] == selected_region
     ]
 
-    st.dataframe(filtered.head())
+if selected_category != "All":
+    filtered_df = filtered_df[
+        filtered_df["Category"] == selected_category
+    ]
 
-# -------------------------------------------------------
-# Page 2
-# -------------------------------------------------------
+# -----------------------------
+# KPI Cards
+# -----------------------------
+if page == "🏠 Sales Overview":
 
-elif page=="Forecast Explorer":
+    total_sales = filtered_df["Sales"].sum()
 
-    st.header("Forecast Explorer")
+    total_orders = filtered_df.shape[0]
 
-    choice=st.selectbox(
+    total_categories = filtered_df["Category"].nunique()
+
+    total_regions = filtered_df["Region"].nunique()
+
+    c1,c2,c3,c4 = st.columns(4)
+
+    c1.metric(
+        "💰 Total Sales",
+        f"${total_sales:,.0f}"
+    )
+
+    c2.metric(
+        "📦 Orders",
+        total_orders
+    )
+
+    c3.metric(
+        "🛍 Categories",
+        total_categories
+    )
+
+    c4.metric(
+        "🌍 Regions",
+        total_regions
+    )
+
+    st.markdown("---")
+
+    # ------------------------------------
+    # Yearly Sales
+    # ------------------------------------
+
+    yearly = df.groupby("Year")["Sales"].sum().reset_index()
+
+    fig = px.bar(
+        yearly,
+        x="Year",
+        y="Sales",
+        title="Yearly Sales"
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+    # ------------------------------------
+    # Monthly Sales Trend
+    # ------------------------------------
+
+    monthly = filtered_df.groupby("Month")["Sales"].sum().reset_index()
+
+    fig = px.line(
+        monthly,
+        x="Month",
+        y="Sales",
+        markers=True,
+        title="Monthly Sales Trend"
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+    # ------------------------------------
+    # Region vs Sales
+    # ------------------------------------
+
+    c1,c2 = st.columns(2)
+
+    with c1:
+
+        region_sales = filtered_df.groupby(
+            "Region"
+        )["Sales"].sum().reset_index()
+
+        fig = px.bar(
+            region_sales,
+            x="Region",
+            y="Sales",
+            color="Region",
+            title="Sales by Region"
+        )
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+    with c2:
+
+        category_sales = filtered_df.groupby(
+            "Category"
+        )["Sales"].sum().reset_index()
+
+        fig = px.pie(
+            category_sales,
+            names="Category",
+            values="Sales",
+            title="Sales by Category"
+        )
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+    st.markdown("### Sample Data")
+
+    st.dataframe(
+        filtered_df.head(20),
+        use_container_width=True
+    )
+# ------------------------------------------------------------
+# Forecast Explorer
+# ------------------------------------------------------------
+
+elif page == "📈 Forecast Explorer":
+
+    st.header("📈 Sales Forecast Explorer")
+
+    category = st.selectbox(
         "Select Category",
         sorted(df["Category"].unique())
     )
 
-    months=st.slider(
-        "Forecast Horizon",
+    region = st.selectbox(
+        "Select Region",
+        sorted(df["Region"].unique())
+    )
+
+    horizon = st.slider(
+        "Forecast Horizon (Months)",
         1,
         3,
         3
     )
 
-    sales=df[
-        df["Category"]==choice
-    ]["Sales"].sum()
+    forecast_df = df[
+        (df["Category"] == category) &
+        (df["Region"] == region)
+    ].copy()
 
-    st.metric(
-        "Current Sales",
-        f"{sales:,.2f}"
+    monthly_sales = forecast_df.groupby(
+        pd.Grouper(key="Order Date", freq="ME")
+    )["Sales"].sum().reset_index()
+
+    st.subheader("Historical Monthly Sales")
+
+    fig = px.line(
+        monthly_sales,
+        x="Order Date",
+        y="Sales",
+        markers=True,
+        title="Historical Sales"
     )
 
-    st.info(
-        f"Forecast generated for next {months} month(s)."
+    st.plotly_chart(
+        fig,
+        use_container_width=True
     )
 
-    st.success("MAE : Example Value")
-    st.success("RMSE : Example Value")
+    # ---------------------------------------------
+    # Moving Average Forecast
+    # ---------------------------------------------
 
-# -------------------------------------------------------
-# Page 3
-# -------------------------------------------------------
+    forecast = monthly_sales.copy()
 
-elif page=="Anomaly Report":
+    future_dates = pd.date_range(
+        start=forecast["Order Date"].max() + pd.offsets.MonthEnd(1),
+        periods=horizon,
+        freq="ME"
+    )
 
-    st.header("Weekly Sales Anomaly Detection")
+    future_values = []
 
-    weekly=df.groupby(
+    sales = list(forecast["Sales"])
+
+    for i in range(horizon):
+
+        prediction = np.mean(sales[-3:])
+
+        future_values.append(prediction)
+
+        sales.append(prediction)
+
+    future = pd.DataFrame({
+
+        "Order Date": future_dates,
+
+        "Sales": future_values
+
+    })
+
+    st.subheader("Forecast")
+
+    fig = px.line()
+
+    fig.add_scatter(
+        x=forecast["Order Date"],
+        y=forecast["Sales"],
+        mode="lines+markers",
+        name="Historical"
+    )
+
+    fig.add_scatter(
+        x=future["Order Date"],
+        y=future["Sales"],
+        mode="lines+markers",
+        name="Forecast"
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+    # ---------------------------------------------
+    # Forecast Table
+    # ---------------------------------------------
+
+    st.subheader("Forecast Values")
+
+    display = future.copy()
+
+    display.columns = [
+        "Month",
+        "Forecast Sales"
+    ]
+
+    st.dataframe(
+        display,
+        use_container_width=True
+    )
+
+    # ---------------------------------------------
+    # Forecast Metrics
+    # ---------------------------------------------
+
+    c1, c2, c3 = st.columns(3)
+
+    mae = np.mean(
+        np.abs(
+            monthly_sales["Sales"] -
+            monthly_sales["Sales"].rolling(3).mean().fillna(
+                monthly_sales["Sales"].mean()
+            )
+        )
+    )
+
+    rmse = np.sqrt(
+        np.mean(
+            (
+                monthly_sales["Sales"] -
+                monthly_sales["Sales"].rolling(3).mean().fillna(
+                    monthly_sales["Sales"].mean()
+                )
+            )**2
+        )
+    )
+
+    c1.metric(
+        "MAE",
+        f"{mae:.2f}"
+    )
+
+    c2.metric(
+        "RMSE",
+        f"{rmse:.2f}"
+    )
+
+    c3.metric(
+        "Forecast Months",
+        horizon
+    )
+
+    st.success(
+        "The forecast above is generated using a Moving Average baseline suitable for dashboard visualization. Your notebook contains the full SARIMA, Prophet, and XGBoost models for detailed forecasting."
+    )
+# ------------------------------------------------------------
+# Anomaly Report
+# ------------------------------------------------------------
+
+elif page == "🚨 Anomaly Report":
+
+    st.header("🚨 Weekly Sales Anomaly Detection")
+
+    weekly = df.groupby(
         pd.Grouper(
             key="Order Date",
             freq="W"
         )
     )["Sales"].sum().reset_index()
 
-    iso=IsolationForest(
+    model = IsolationForest(
         contamination=0.05,
         random_state=42
     )
 
-    weekly["Anomaly"]=iso.fit_predict(
+    weekly["Anomaly"] = model.fit_predict(
         weekly[["Sales"]]
     )
 
-    fig,ax=plt.subplots(figsize=(12,5))
-
-    ax.plot(
-        weekly["Order Date"],
-        weekly["Sales"]
-    )
-
-    abnormal=weekly[
-        weekly["Anomaly"]==-1
+    anomalies = weekly[
+        weekly["Anomaly"] == -1
     ]
 
-    ax.scatter(
-        abnormal["Order Date"],
-        abnormal["Sales"],
-        color="red"
+    fig = px.line(
+        weekly,
+        x="Order Date",
+        y="Sales",
+        title="Weekly Sales"
     )
 
-    st.pyplot(fig)
+    fig.add_scatter(
+        x=anomalies["Order Date"],
+        y=anomalies["Sales"],
+        mode="markers",
+        marker=dict(
+            size=10,
+            color="red"
+        ),
+        name="Anomaly"
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+    st.subheader("Detected Anomalies")
 
     st.dataframe(
-        abnormal
+        anomalies,
+        use_container_width=True
     )
 
-# -------------------------------------------------------
-# Page 4
-# -------------------------------------------------------
+    c1,c2,c3 = st.columns(3)
+
+    c1.metric(
+        "Total Weeks",
+        len(weekly)
+    )
+
+    c2.metric(
+        "Anomalies",
+        len(anomalies)
+    )
+
+    c3.metric(
+        "Anomaly %",
+        f"{len(anomalies)/len(weekly)*100:.2f}%"
+    )
+
+    st.info(
+        "Red points represent unusual sales behaviour detected using Isolation Forest."
+    )
+
+# ------------------------------------------------------------
+# Product Demand Segments
+# ------------------------------------------------------------
 
 else:
 
-    st.header("📦 Product Demand Segments")
+    st.header("📦 Product Demand Segmentation")
 
-    # Aggregate sales by Sub-Category
-    products = df.groupby("Sub-Category").agg(
-        TotalSales=("Sales", "sum"),
-        AverageSales=("Sales", "mean"),
-        SalesStd=("Sales", "std"),
-        Orders=("Sales", "count")
+    product_data = df.groupby(
+        "Sub-Category"
+    ).agg(
+
+        TotalSales=("Sales","sum"),
+        AvgSales=("Sales","mean"),
+        SalesStd=("Sales","std"),
+        OrderCount=("Sales","count")
+
     ).reset_index()
 
-    # Fill missing values
-    products.fillna(0, inplace=True)
+    product_data.fillna(0,inplace=True)
 
-    # Features for clustering
-    features = products[
-        ["TotalSales", "AverageSales", "SalesStd", "Orders"]
+    features = product_data[
+        [
+            "TotalSales",
+            "AvgSales",
+            "SalesStd",
+            "OrderCount"
+        ]
     ]
 
-    # Scale Features
     scaler = StandardScaler()
-    X = scaler.fit_transform(features)
 
-    # KMeans Clustering
+    scaled = scaler.fit_transform(features)
+
     model = KMeans(
         n_clusters=4,
         random_state=42,
         n_init=10
     )
 
-    products["Cluster"] = model.fit_predict(X)
+    product_data["Cluster"] = model.fit_predict(scaled)
 
-    # PCA
-    pca = PCA(n_components=2)
+    pca = PCA(
+        n_components=2
+    )
 
-    pca_features = pca.fit_transform(X)
+    pcs = pca.fit_transform(scaled)
 
-    products["PC1"] = pca_features[:, 0]
-    products["PC2"] = pca_features[:, 1]
+    product_data["PC1"] = pcs[:,0]
+    product_data["PC2"] = pcs[:,1]
 
-    # Cluster Labels
     cluster_names = {
-        0: "High Demand",
-        1: "Growing Demand",
-        2: "Low Demand",
-        3: "Seasonal Demand"
+
+        0:"High Demand",
+
+        1:"Growing Demand",
+
+        2:"Low Demand",
+
+        3:"Seasonal Demand"
+
     }
 
-    products["Demand Segment"] = products["Cluster"].map(cluster_names)
+    product_data["Demand Segment"] = product_data[
+        "Cluster"
+    ].map(cluster_names)
 
-    # Scatter Plot
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig = px.scatter(
 
-    sns.scatterplot(
-        data=products,
+        product_data,
+
         x="PC1",
+
         y="PC2",
-        hue="Demand Segment",
-        s=150,
-        palette="Set2",
-        ax=ax
+
+        color="Demand Segment",
+
+        text="Sub-Category",
+
+        title="Product Demand Clusters"
+
     )
 
-    for i in range(len(products)):
-        ax.text(
-            products["PC1"][i],
-            products["PC2"][i],
-            products["Sub-Category"][i],
-            fontsize=8
-        )
+    fig.update_traces(
+        textposition="top center"
+    )
 
-    ax.set_title("Product Demand Segmentation using K-Means")
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
 
-    st.pyplot(fig)
-
-    st.subheader("Demand Segment Table")
+    st.subheader("Cluster Summary")
 
     st.dataframe(
-        products[
+
+        product_data[
             [
+
                 "Sub-Category",
+
                 "TotalSales",
-                "AverageSales",
-                "Orders",
+
+                "AvgSales",
+
+                "OrderCount",
+
                 "Demand Segment"
+
             ]
-        ]
+
+        ],
+
+        use_container_width=True
+
     )
 
-    st.subheader("Business Recommendations")
+    st.markdown("---")
 
-    st.success("🟢 High Demand → Maintain higher inventory levels.")
+    st.subheader("📋 Business Recommendations")
 
-    st.info("🔵 Growing Demand → Increase stock gradually and monitor trends.")
+    col1,col2 = st.columns(2)
 
-    st.warning("🟡 Seasonal Demand → Prepare inventory before peak seasons.")
+    with col1:
 
-    st.error("🔴 Low Demand → Reduce inventory and avoid overstocking.")
+        st.success(
+            """
+High Demand
+
+• Maintain higher inventory
+
+• Prioritize fast delivery
+
+• Avoid stock-outs
+"""
+        )
+
+        st.warning(
+            """
+Seasonal Demand
+
+• Stock before peak season
+
+• Monitor monthly trend
+
+• Plan promotional campaigns
+"""
+        )
+
+    with col2:
+
+        st.info(
+            """
+Growing Demand
+
+• Increase inventory gradually
+
+• Monitor customer demand
+
+• Expand marketing
+"""
+        )
+
+        st.error(
+            """
+Low Demand
+
+• Reduce inventory
+
+• Bundle with other products
+
+• Avoid overstock
+"""
+        )
+
+    st.markdown("---")
+
+    st.subheader("Demand Segment Distribution")
+
+    count_df = product_data["Demand Segment"].value_counts().reset_index()
+
+    count_df.columns = [
+
+        "Demand Segment",
+
+        "Products"
+
+    ]
+
+    fig = px.bar(
+
+        count_df,
+
+        x="Demand Segment",
+
+        y="Products",
+
+        color="Demand Segment",
+
+        title="Products per Demand Segment"
+
+    )
+
+    st.plotly_chart(
+
+        fig,
+
+        use_container_width=True
+
+    )
+# ============================================================
+# PROFESSIONAL DASHBOARD FOOTER
+# ============================================================
+
+st.markdown("---")
+
+st.markdown(
+"""
+<style>
+
+.metric-box{
+    background-color:#f5f7fa;
+    padding:15px;
+    border-radius:10px;
+    border:1px solid #d3d3d3;
+}
+
+.footer{
+    text-align:center;
+    padding:20px;
+    font-size:15px;
+    color:gray;
+}
+
+.big-title{
+    font-size:30px;
+    font-weight:bold;
+}
+
+.small{
+    color:gray;
+}
+
+</style>
+""",
+unsafe_allow_html=True
+)
+
+st.markdown("---")
+
+st.subheader("📊 Dashboard Summary")
+
+c1,c2,c3,c4 = st.columns(4)
+
+c1.metric(
+    "Dataset Rows",
+    f"{len(df):,}"
+)
+
+c2.metric(
+    "Total Sales",
+    f"${df['Sales'].sum():,.0f}"
+)
+
+c3.metric(
+    "Categories",
+    df["Category"].nunique()
+)
+
+c4.metric(
+    "Regions",
+    df["Region"].nunique()
+)
+
+st.markdown("---")
+
+st.subheader("📌 Project Highlights")
+
+st.markdown("""
+
+✅ Time Series Analysis
+
+✅ Sales Trend Visualization
+
+✅ Forecast Explorer
+
+✅ Anomaly Detection
+
+✅ Product Demand Segmentation
+
+✅ Interactive Dashboard
+
+✅ Business Insights
+
+""")
+
+st.markdown("---")
+
+st.subheader("💼 Business Recommendations")
+
+st.success("""
+✔ Maintain sufficient inventory for High Demand products.
+""")
+
+st.info("""
+✔ Increase stock gradually for Growing Demand products.
+""")
+
+st.warning("""
+✔ Prepare inventory before Seasonal Demand periods.
+""")
+
+st.error("""
+✔ Reduce stock levels for consistently Low Demand products.
+""")
+
+st.markdown("---")
+
+st.subheader("📄 Download Dataset")
+
+csv = df.to_csv(index=False).encode("utf-8")
+
+st.download_button(
+    label="⬇ Download Dataset",
+    data=csv,
+    file_name="SalesForecast_Data.csv",
+    mime="text/csv"
+)
+
+st.markdown("---")
+
+st.subheader("ℹ About this Dashboard")
+
+st.write("""
+This dashboard was developed as part of the **End-to-End Sales Forecasting & Demand Intelligence System** internship project.
+
+It demonstrates:
+
+- Sales analytics
+- Time series forecasting
+- Demand segmentation
+- Anomaly detection
+- Business intelligence
+- Interactive visualization using Streamlit
+""")
+
+st.markdown("---")
+
+st.markdown(
+"""
+<div class="footer">
+
+<b>End-to-End Sales Forecasting & Demand Intelligence System</b>
+
+<br>
+
+Developed using Python • Pandas • Plotly • Scikit-Learn • Streamlit
+
+<br><br>
+
+© 2026 Internship Project
+
+</div>
+""",
+unsafe_allow_html=True
+)
