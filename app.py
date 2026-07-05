@@ -32,13 +32,15 @@ def load_data():
 
     df["Order Date"] = pd.to_datetime(
         df["Order Date"],
-        dayfirst=True
-    )
+        format="%d/%m/%Y",
+        errors="coerce"
+)
 
     df["Ship Date"] = pd.to_datetime(
         df["Ship Date"],
-        dayfirst=True
-    )
+        format="%d/%m/%Y",
+        errors="coerce"
+)
 
     df["Year"] = df["Order Date"].dt.year
     df["Month"] = df["Order Date"].dt.month
@@ -49,6 +51,8 @@ def load_data():
     return df
 
 df = load_data()
+
+df.dropna(subset=["Order Date"], inplace=True)
 
 # -----------------------------
 # Sidebar
@@ -150,7 +154,7 @@ if page == "🏠 Sales Overview":
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch"
     )
 
     # ------------------------------------
@@ -169,7 +173,7 @@ if page == "🏠 Sales Overview":
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch"
     )
 
     # ------------------------------------
@@ -194,7 +198,7 @@ if page == "🏠 Sales Overview":
 
         st.plotly_chart(
             fig,
-            use_container_width=True
+            width="stretch"
         )
 
     with c2:
@@ -212,14 +216,14 @@ if page == "🏠 Sales Overview":
 
         st.plotly_chart(
             fig,
-            use_container_width=True
+            width="stretch"
         )
 
     st.markdown("### Sample Data")
 
     st.dataframe(
         filtered_df.head(20),
-        use_container_width=True
+        width="stretch"
     )
 # ------------------------------------------------------------
 # Forecast Explorer
@@ -267,7 +271,7 @@ elif page == "📈 Forecast Explorer":
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch"
     )
 
     # ---------------------------------------------
@@ -322,7 +326,7 @@ elif page == "📈 Forecast Explorer":
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch"
     )
 
     # ---------------------------------------------
@@ -340,7 +344,7 @@ elif page == "📈 Forecast Explorer":
 
     st.dataframe(
         display,
-        use_container_width=True
+        width="stretch"
     )
 
     # ---------------------------------------------
@@ -435,14 +439,14 @@ elif page == "🚨 Anomaly Report":
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch"
     )
 
     st.subheader("Detected Anomalies")
 
     st.dataframe(
         anomalies,
-        use_container_width=True
+        width="stretch"
     )
 
     c1,c2,c3 = st.columns(3)
@@ -503,7 +507,7 @@ else:
     model = KMeans(
         n_clusters=4,
         random_state=42,
-        n_init=10
+        n_init="10"
     )
 
     product_data["Cluster"] = model.fit_predict(scaled)
@@ -555,7 +559,7 @@ else:
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch"
     )
 
     st.subheader("Cluster Summary")
@@ -579,7 +583,7 @@ else:
 
         ],
 
-        use_container_width=True
+        width="stretch"
 
     )
 
@@ -673,7 +677,7 @@ Low Demand
 
         fig,
 
-        use_container_width=True
+        width="stretch"
 
     )
 # ============================================================
